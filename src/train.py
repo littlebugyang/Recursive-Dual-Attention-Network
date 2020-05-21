@@ -269,12 +269,14 @@ def main(config):
     if os.path.exists(os.path.join(data_directory, "norm.csv")):
         baseline_cpsnrs = readBaselineCPSNR(os.path.join(data_directory, "norm.csv"))
 
-    train_set_directories = getImageSetDirectories(os.path.join(data_directory, "train"))
+    #train_set_directories = getImageSetDirectories(os.path.join(data_directory, "train"))
 
+    train_set_directories = [line.rstrip() for line in open('/home/aistudio/data/data35820/available_list.txt')]
     val_proportion = config['training']['val_proportion']
     train_list, val_list = train_test_split(train_set_directories,
                                             test_size=val_proportion,
                                             random_state=1, shuffle=True)
+
 
     # Dataloaders
     batch_size = config["training"]["batch_size"]
