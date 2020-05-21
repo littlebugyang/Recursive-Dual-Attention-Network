@@ -142,9 +142,13 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
 
     best_score = 100
 
-    P = config["training"]["patch_size"]
-    offset = (3 * config["training"]["patch_size"] - 128) // 2
-    C = config["training"]["crop"]
+    P = config["training"]["patch_size"] # default patch_size: 64
+    low_res_width = config["training"]["lr_width"]
+    low_res_height = config["training"]["lr_height"]
+    offset_x = (config["training"]["scale_factor"] * config["training"]["patch_size"] - low_res_width) // 2
+    offset_y = (config["training"]["scale_factor"] * config["training"]["patch_size"] - low_res_height) // 2
+    # offset = (3 * config["training"]["patch_size"] - 128) // 2 # 这个 offset 取法我实在是看不懂
+    C = config["training"]["crop"] # default crop: 3
     torch_mask = get_crop_mask(patch_size=P, crop_size=C)
     torch_mask = torch_mask.to(device)  # crop borders (loss)
 
@@ -166,6 +170,7 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
             # lrs: 输入的 low-res 图像
             # alphas: 看 read_imageset 的注释，应该是clearances
             # hrs: 输入的 high-res 图像
+            # hr_maps: todo:????
             # names: imageset 的名字
 
             optimizer.zero_grad()  # zero the parameter gradients
@@ -175,12 +180,14 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
             hrs = hrs.float().to(device)
 
             # torch.autograd.set_detect_anomaly(mode=True)
-            srs = fusion_model(lrs, alphas)  # fuse multi frames (B, 1, 3*W, 3*H)
+            # srs = fusion_model(lrs, alphas)  # fuse multi frames (B, 1, 3*W, 3*H)
+            srs = fusion_model(lrs)
 
             # Register batch wrt HR
+            # todo:????
             shifts = register_batch(regis_model,
-                                    srs[:, :, offset:(offset + 128), offset:(offset + 128)],
-                                    reference=hrs[:, offset:(offset + 128), offset:(offset + 128)].view(-1, 1, 128, 128))
+                                    srs[:, :, offset:(offset + low_res_width), offset:(offset + low_res_height)],
+                                    reference=hrs[:, offset:(offset + low_res_width), offset:(offset + low_res_height)].view(-1, 1, low_res_width, low_res_height))
             srs_shifted = apply_shifts(regis_model, srs, shifts, device)[:, 0]
 
             # Training loss
