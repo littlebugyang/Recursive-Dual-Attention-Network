@@ -23,10 +23,8 @@ class AttentionBlock(nn.Module):
         new_x = x.view(-1, channels, width, height)
         CA = self.ca(new_x)
         SA = self.sa(new_x)
-        # print(CA.size(), SA.size(), self.kernel_size)
         FA = CA + SA
         FA = torch.nn.Sigmoid()(FA)
-        # print(FA.size(), x.size())
         result = new_x * FA
         return result.view(batch_size, nviews, channels, width, height)
 
@@ -117,6 +115,8 @@ class RecursiveNet(nn.Module):
         kernel_size = config["kernel_size"]
         padding = kernel_size // 2
 
+        # ResidualBlock 就是 g_\theta
+        # ResBlock 后的 Conv2d + PReLU 就是 f_\theta
         self.fuse = nn.Sequential(
             ResidualBlock(2 * self.input_channels, kernel_size),
             nn.Conv2d(in_channels=2 * self.input_channels, out_channels=self.input_channels,
@@ -127,7 +127,8 @@ class RecursiveNet(nn.Module):
             AttentionBlock(self.input_channels, 2 * self.input_channels, 16)
         )
 
-    def forward(self, x, alphas):
+    def forward(self, x):
+    #def forward(self, x, alphas):
         '''
         Fuses hidden states recursively.
         Args:
@@ -138,32 +139,55 @@ class RecursiveNet(nn.Module):
         '''
         
         batch_size, nviews, channels, width, height = x.shape
-        parity = nviews % 2
-        half_len = nviews // 2
+        parity = nviews % 2 # parity 为奇偶性
+
+        if parity == 1:
+            # 好了，不需要用到 parity 了
+            print("Please enter the nviews of 2's power. ")
+            exit(0)
+        
+        half_len = nviews // 2 # 下取一半
         
         while half_len > 0:
+            # 将 hidden states 分成两半，首尾组合送入到 fuse 中
             alice = x[:, :half_len] # first half hidden states (B, L/2, C, W, H)
             bob = x[:, half_len:nviews - parity] # second half hidden states (B, L/2, C, W, H)
-            bob = torch.flip(bob, [1])
+            bob = torch.flip(bob, [1]) # flip 之后可以保证是首尾组合
 
             alice_and_bob = torch.cat([alice, bob], 2)  # concat hidden states accross channels (B, L/2, 2*C, W, H)
             alice_and_bob = alice_and_bob.view(-1, 2 * channels, width, height)
+
+            # 下方的 x 经过 self.fuse 之后变成 论文中的 f_\theta 块之后的产物
             x = self.fuse(alice_and_bob)
             x = x.view(batch_size, half_len, channels, width, height)  # new hidden states (B, L/2, C, W, H)
 
+            '''
             if self.alpha_residual: # skip connect padded views (alphas_bob = 0)
                 alphas_alice = alphas[:, :half_len]
                 alphas_bob = alphas[:, half_len:nviews - parity]
                 alphas_bob = torch.flip(alphas_bob, [1])
+
+                # 下方的 x 经过和 alice & alphas_bob 的运算，变成论文中的 \hat{s}_a^t
+                # 其实 alphas_bob 是 0 和 1 的集合体，相当于只有一部分的 x 可以参与到 skip connect 中
                 x = alice + alphas_bob * x
                 am_out = self.attention(x)
                 x = x + am_out
                 alphas = alphas_alice
+            '''
+
+            # 本网络训练中不会出现用纯黑图填充的操作，所以全部进入 recursive net 的 hidden state 都要 skip connect
+            # 以下代码均为重复上方代码
+            # 下方的 x 变成论文中的 \hat{s}_a^t
+            x = alice + x
+            am_out = self.attention(x)
+            x = x + am_out
+            alphas = alphas[:, :half_len]
 
             nviews = half_len
             parity = nviews % 2
             half_len = nviews // 2
 
+        # But, .... why mean ?
         return torch.mean(x, 1)
 
 
@@ -216,7 +240,8 @@ class HRNet(nn.Module):
         self.fuse = RecursiveNet(config["recursive"])
         self.decode = Decoder(config["decoder"])
 
-    def forward(self, lrs, alphas):
+    def forward(self, lrs):
+    # def forward(self, lrs, alphas):
         '''
         Super resolves a batch of low-resolution images.
         Args:
@@ -228,7 +253,7 @@ class HRNet(nn.Module):
 
         batch_size, seq_len, height, width = lrs.shape
         lrs = lrs.view(-1, seq_len, 1, height, width)
-        alphas = alphas.view(-1, seq_len, 1, 1, 1)
+        # alphas = alphas.view(-1, seq_len, 1, 1, 1)
 
         refs, _ = torch.median(lrs[:, :9], 1, keepdim=True)  # reference image aka anchor, shared across multiple views
         refs = refs.repeat(1, seq_len, 1, 1, 1)
@@ -239,6 +264,7 @@ class HRNet(nn.Module):
         layer1 = layer1.view(batch_size, seq_len, -1, width, height) # tensor (B, L, C, W, H)
 
         # fuse, upsample
-        recursive_layer = self.fuse(layer1, alphas)  # fuse hidden states (B, C, W, H)
+        # recursive_layer = self.fuse(layer1, alphas)  # fuse hidden states (B, C, W, H)
+        recursive_layer = self.fuse(layer1)
         srs = self.decode(recursive_layer)  # decode final hidden state (B, C_out, 3*W, 3*H)
         return srs
