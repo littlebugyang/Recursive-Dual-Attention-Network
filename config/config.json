@@ -1,6 +1,6 @@
 {
   "paths": {
-    "prefix": "data/",
+    "prefix": "/home/aistudio/data/data35820",
     "checkpoint_dir": "models/weights",
     "tb_log_file_dir": "tb_logs/"
   },

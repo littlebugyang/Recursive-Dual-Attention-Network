@@ -163,6 +163,10 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
 
         # Iterate over data.
         for lrs, alphas, hrs, hr_maps, names in tqdm(dataloaders['train']):
+            # lrs: 输入的 low-res 图像
+            # alphas: 看 read_imageset 的注释，应该是clearances
+            # hrs: 输入的 high-res 图像
+            # names: imageset 的名字
 
             optimizer.zero_grad()  # zero the parameter gradients
             lrs = lrs.float().to(device)
@@ -278,7 +282,7 @@ def main(config):
                                   collate_fn=collateFunction(min_L=min_L),
                                   pin_memory=True)
 
-    config["training"]["create_patches"] = False
+    config["training"]["create_patches"] = False # 等效于只有train_dataset用了create_patches
     val_dataset = ImagesetDataset(imset_dir=val_list, config=config["training"],
                                   top_k=n_views, beta=beta)
     val_dataloader = DataLoader(val_dataset, batch_size=1,

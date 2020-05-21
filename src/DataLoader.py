@@ -191,6 +191,9 @@ class ImagesetDataset(Dataset):
             imset = imset[0]
 
         imset_list = imset if isinstance(imset, list) else [imset]
+
+        # 下面的 for loop 将读取的图片从 numpy 的 ndarray 转到 Tensor
+        # 但是我不知道拿imset_list有什么用，后面返回的是imset
         for i, imset_ in enumerate(imset_list):
             imset_['lr'] = torch.from_numpy(skimage.img_as_float(imset_['lr']).astype(np.float32))
             if imset_['hr'] is not None:

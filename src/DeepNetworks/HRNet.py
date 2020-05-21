@@ -3,6 +3,33 @@
 import torch.nn as nn
 import torch
 
+class AttentionBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, reduction=16):
+        super(AttentionBlock, self).__init__()
+        module_ca = [
+            torch.nn.AdaptiveAvgPool2d(1),
+            torch.nn.Conv2d(in_channels, in_channels // reduction, 1, padding=0, bias=True),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.Conv2d(in_channels // reduction, in_channels, 1, padding=0, bias=True),
+        ]
+        module_sa = [
+            torch.nn.Conv2d(in_channels, 1 * in_channels, 3, 1, padding=1, bias=True, groups=in_channels)
+        ]
+        self.ca = torch.nn.Sequential(*module_ca)
+        self.sa = torch.nn.Sequential(*module_sa)
+
+    def forward(self, x):
+        batch_size, nviews, channels, width, height = x.shape
+        new_x = x.view(-1, channels, width, height)
+        CA = self.ca(new_x)
+        SA = self.sa(new_x)
+        # print(CA.size(), SA.size(), self.kernel_size)
+        FA = CA + SA
+        FA = torch.nn.Sigmoid()(FA)
+        # print(FA.size(), x.size())
+        result = new_x * FA
+        return result.view(batch_size, nviews, channels, width, height)
+
 
 class ResidualBlock(nn.Module):
     def __init__(self, channel_size=64, kernel_size=3):
@@ -74,7 +101,7 @@ class Encoder(nn.Module):
         return x
 
 
-class RecuversiveNet(nn.Module):
+class RecursiveNet(nn.Module):
 
     def __init__(self, config):
         '''
@@ -82,7 +109,7 @@ class RecuversiveNet(nn.Module):
             config : dict, configuration file
         '''
         
-        super(RecuversiveNet, self).__init__()
+        super(RecursiveNet, self).__init__()
 
         self.input_channels = config["in_channels"]
         self.num_layers = config["num_layers"]
@@ -96,6 +123,10 @@ class RecuversiveNet(nn.Module):
                       kernel_size=kernel_size, padding=padding),
             nn.PReLU())
 
+        self.attention = nn.Sequential(
+            AttentionBlock(self.input_channels, 2 * self.input_channels, 16)
+        )
+
     def forward(self, x, alphas):
         '''
         Fuses hidden states recursively.
@@ -106,7 +137,7 @@ class RecuversiveNet(nn.Module):
             out: tensor (B, C, W, H), fused hidden state
         '''
         
-        batch_size, nviews, channels, width, heigth = x.shape
+        batch_size, nviews, channels, width, height = x.shape
         parity = nviews % 2
         half_len = nviews // 2
         
@@ -116,15 +147,17 @@ class RecuversiveNet(nn.Module):
             bob = torch.flip(bob, [1])
 
             alice_and_bob = torch.cat([alice, bob], 2)  # concat hidden states accross channels (B, L/2, 2*C, W, H)
-            alice_and_bob = alice_and_bob.view(-1, 2 * channels, width, heigth)
+            alice_and_bob = alice_and_bob.view(-1, 2 * channels, width, height)
             x = self.fuse(alice_and_bob)
-            x = x.view(batch_size, half_len, channels, width, heigth)  # new hidden states (B, L/2, C, W, H)
+            x = x.view(batch_size, half_len, channels, width, height)  # new hidden states (B, L/2, C, W, H)
 
             if self.alpha_residual: # skip connect padded views (alphas_bob = 0)
                 alphas_alice = alphas[:, :half_len]
                 alphas_bob = alphas[:, half_len:nviews - parity]
                 alphas_bob = torch.flip(alphas_bob, [1])
                 x = alice + alphas_bob * x
+                am_out = self.attention(x)
+                x = x + am_out
                 alphas = alphas_alice
 
             nviews = half_len
@@ -180,7 +213,7 @@ class HRNet(nn.Module):
 
         super(HRNet, self).__init__()
         self.encode = Encoder(config["encoder"])
-        self.fuse = RecuversiveNet(config["recursive"])
+        self.fuse = RecursiveNet(config["recursive"])
         self.decode = Decoder(config["decoder"])
 
     def forward(self, lrs, alphas):
@@ -193,17 +226,17 @@ class HRNet(nn.Module):
             srs: tensor (B, C_out, W, H), super-resolved images
         '''
 
-        batch_size, seq_len, heigth, width = lrs.shape
-        lrs = lrs.view(-1, seq_len, 1, heigth, width)
+        batch_size, seq_len, height, width = lrs.shape
+        lrs = lrs.view(-1, seq_len, 1, height, width)
         alphas = alphas.view(-1, seq_len, 1, 1, 1)
 
         refs, _ = torch.median(lrs[:, :9], 1, keepdim=True)  # reference image aka anchor, shared across multiple views
         refs = refs.repeat(1, seq_len, 1, 1, 1)
         stacked_input = torch.cat([lrs, refs], 2) # tensor (B, L, 2*C_in, W, H)
         
-        stacked_input = stacked_input.view(batch_size * seq_len, 2, width, heigth)
+        stacked_input = stacked_input.view(batch_size * seq_len, 2, width, height)
         layer1 = self.encode(stacked_input) # encode input tensor
-        layer1 = layer1.view(batch_size, seq_len, -1, width, heigth) # tensor (B, L, C, W, H)
+        layer1 = layer1.view(batch_size, seq_len, -1, width, height) # tensor (B, L, C, W, H)
 
         # fuse, upsample
         recursive_layer = self.fuse(layer1, alphas)  # fuse hidden states (B, C, W, H)
