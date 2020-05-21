@@ -135,6 +135,7 @@ def read_imageset(imset_dir, create_patches=False, patch_size=64, seed=None, top
     # lr_images = np.array([transform.resize(io.imread(join(imset_dir, f'LR{i}.png')), ) for i in idx_names], dtype=np.uint16)
 
     # hr_map = np.array(io.imread(join(imset_dir, 'SM.png')), dtype=np.bool) # 实际上 SM.png 大多是 1
+    hr_map = np.array(np.ones(hr.shape), dtype=np.bool)
     '''
     if exists(join(imset_dir, 'HR.png')):
         hr = np.array(io.imread(join(imset_dir, 'HR.png')), dtype=np.uint16)
@@ -154,7 +155,7 @@ def read_imageset(imset_dir, create_patches=False, patch_size=64, seed=None, top
         x = np.random.randint(low=0, high=max_x)
         y = np.random.randint(low=0, high=max_y)
         lr_images = get_patch(lr_images, x, y, patch_size)  # broadcasting slicing coordinates across all images
-        # hr_map = get_patch(hr_map, x * scale_factor, y * scale_factor, patch_size * scale_factor)
+        hr_map = get_patch(hr_map, x * scale_factor, y * scale_factor, patch_size * scale_factor)
 
         '''
         if hr is not None:
@@ -166,7 +167,7 @@ def read_imageset(imset_dir, create_patches=False, patch_size=64, seed=None, top
     imageset = ImageSet(name=basename(imset_dir),
                         lr=np.array(lr_images),
                         hr=hr,
-                        # hr_map=hr_map,
+                        hr_map=hr_map,
                         # clearances=clearances,
                         )
 

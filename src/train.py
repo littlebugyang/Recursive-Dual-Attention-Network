@@ -166,7 +166,8 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
         train_loss = 0.0  # monitor train loss
 
         # Iterate over data.
-        for lrs, alphas, hrs, hr_maps, names in tqdm(dataloaders['train']):
+        for lrs, hrs, hr_maps, names in tqdm(dataloaders["train"]):
+        # for lrs, alphas, hrs, hr_maps, names in tqdm(dataloaders['train']):
             # lrs: 输入的 low-res 图像
             # alphas: 看 read_imageset 的注释，应该是clearances
             # hrs: 输入的 high-res 图像
@@ -175,7 +176,7 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
 
             optimizer.zero_grad()  # zero the parameter gradients
             lrs = lrs.float().to(device)
-            alphas = alphas.float().to(device)
+            # alphas = alphas.float().to(device)
             hr_maps = hr_maps.float().to(device)
             hrs = hrs.float().to(device)
 
@@ -206,9 +207,10 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
         fusion_model.eval()
         val_score = 0.0  # monitor val score
 
-        for lrs, alphas, hrs, hr_maps, names in dataloaders['val']:
+        for lrs, hrs, hr_maps, names in dataloaders["val"]:
+        # for lrs, alphas, hrs, hr_maps, names in dataloaders['val']:
             lrs = lrs.float().to(device)
-            alphas = alphas.float().to(device)
+            # alphas = alphas.float().to(device)
             hrs = hrs.numpy()
             hr_maps = hr_maps.numpy()
 
