@@ -186,8 +186,8 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
             # Register batch wrt HR
             # todo:????
             shifts = register_batch(regis_model,
-                                    srs[:, :, offset:(offset + low_res_width), offset:(offset + low_res_height)],
-                                    reference=hrs[:, offset:(offset + low_res_width), offset:(offset + low_res_height)].view(-1, 1, low_res_width, low_res_height))
+                                    srs[:, :, offset_x:(offset_x + low_res_width), offset_y:(offset_y + low_res_height)],
+                                    reference=hrs[:, offset_x:(offset_x + low_res_width), offset_y:(offset_y + low_res_height)].view(-1, 1, low_res_width, low_res_height))
             srs_shifted = apply_shifts(regis_model, srs, shifts, device)[:, 0]
 
             # Training loss
