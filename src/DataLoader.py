@@ -7,6 +7,7 @@ from os.path import join, exists, basename, isfile
 import glob
 import skimage
 from skimage import io
+from skimage import transform
 
 import torch
 from torch.utils.data import Dataset
@@ -70,7 +71,7 @@ def sample_clearest(clearances, n=None, beta=50, seed=None):
     return i_sample
 
 
-def read_imageset(imset_dir, create_patches=False, patch_size=64, seed=None, top_k=None, beta=0.):
+def read_imageset(imset_dir, create_patches=False, patch_size=64, seed=None, top_k=None, beta=0., scale_factor=4):
     """
     Retrieves all assets from the given directory.
     Args:
@@ -92,9 +93,10 @@ def read_imageset(imset_dir, create_patches=False, patch_size=64, seed=None, top
     """
 
     # Read asset names
-    idx_names = np.array([basename(path)[2:-4] for path in glob.glob(join(imset_dir, 'QM*.png'))])
+    idx_names = np.array([basename(path)[2:-4] for path in glob.glob(join(imset_dir, 'im*.png'))])
     idx_names = np.sort(idx_names)
     
+    '''
     clearances = np.zeros(len(idx_names))
     if isfile(join(imset_dir, 'clearance.npy')):
         try:
@@ -104,7 +106,9 @@ def read_imageset(imset_dir, create_patches=False, patch_size=64, seed=None, top
             print(e)
     else:
         raise Exception("please call the save_clearance.py before call DataLoader")
-
+    '''
+    
+    '''
     if top_k is not None and top_k > 0:
         top_k = min(top_k, len(idx_names))
         i_samples = sample_clearest(clearances, n=top_k, beta=beta, seed=seed)
@@ -114,35 +118,56 @@ def read_imageset(imset_dir, create_patches=False, patch_size=64, seed=None, top
         i_clear_sorted = np.argsort(clearances)[::-1]  # max to min
         clearances = clearances[i_clear_sorted]
         idx_names = idx_names[i_clear_sorted]
+    '''
 
-    lr_images = np.array([io.imread(join(imset_dir, f'LR{i}.png')) for i in idx_names], dtype=np.uint16)
+    hr = np.array(io.imread(join(imset_dir, 'im00001.png')), dtype=np.uint16)
 
-    hr_map = np.array(io.imread(join(imset_dir, 'SM.png')), dtype=np.bool)
+    lr_images = []
+    for i in idx_names:
+        original_image = io.imread(join(imset_dir, f'im{i}.png'))
+        original_width = original_image.shape[0] # should be 448
+        original_height = original_image.shape[1] # should be 256
+        lr_image = transform.resize(original_image, (original_width, original_height))
+        lr_images.append(lr_image)
+    
+    lr_images = np.array(lr_images, dtype=np.uint16)
+
+    # lr_images = np.array([transform.resize(io.imread(join(imset_dir, f'LR{i}.png')), ) for i in idx_names], dtype=np.uint16)
+
+    # hr_map = np.array(io.imread(join(imset_dir, 'SM.png')), dtype=np.bool) # 实际上 SM.png 大多是 1
+    '''
     if exists(join(imset_dir, 'HR.png')):
         hr = np.array(io.imread(join(imset_dir, 'HR.png')), dtype=np.uint16)
     else:
         hr = None  # no high-res image in test data
+    '''
 
     if create_patches:
+        np.random.seed(seed)
+        '''
         if seed is not None:
             np.random.seed(seed)
+        '''
 
         max_x = lr_images[0].shape[0] - patch_size
         max_y = lr_images[0].shape[1] - patch_size
         x = np.random.randint(low=0, high=max_x)
         y = np.random.randint(low=0, high=max_y)
         lr_images = get_patch(lr_images, x, y, patch_size)  # broadcasting slicing coordinates across all images
-        hr_map = get_patch(hr_map, x * 3, y * 3, patch_size * 3)
+        # hr_map = get_patch(hr_map, x * scale_factor, y * scale_factor, patch_size * scale_factor)
 
+        '''
         if hr is not None:
-            hr = get_patch(hr, x * 3, y * 3, patch_size * 3)
+            hr = get_patch(hr, x * scale_factor, y * scale_factor, patch_size * scale_factor)
+        '''
+        hr = get_patch(hr, x * scale_factor, y * scale_factor, patch_size * scale_factor)
 
     # Organise all assets into an ImageSet (OrderedDict)
     imageset = ImageSet(name=basename(imset_dir),
                         lr=np.array(lr_images),
                         hr=hr,
-                        hr_map=hr_map,
-                        clearances=clearances,
+                        # hr_map=hr_map,
+                        # clearances=clearances,
                         )
 
     return imageset
@@ -163,6 +188,7 @@ class ImagesetDataset(Dataset):
         self.seed = seed  # seed for random patches
         self.top_k = top_k
         self.beta = beta
+        self.config = config
         
     def __len__(self):
         return len(self.imset_dir)        
@@ -184,7 +210,8 @@ class ImagesetDataset(Dataset):
                                   patch_size=self.patch_size,
                                   seed=self.seed,
                                   top_k=self.top_k,
-                                  beta=self.beta,)
+                                  beta=self.beta,
+                                  scale_factor=self.config["scale_factor"],)
                     for dir_ in tqdm(imset_dir, disable=(len(imset_dir) < 11))]
 
         if len(imset) == 1:
@@ -198,7 +225,7 @@ class ImagesetDataset(Dataset):
             imset_['lr'] = torch.from_numpy(skimage.img_as_float(imset_['lr']).astype(np.float32))
             if imset_['hr'] is not None:
                 imset_['hr'] = torch.from_numpy(skimage.img_as_float(imset_['hr']).astype(np.float32))
-                imset_['hr_map'] = torch.from_numpy(imset_['hr_map'].astype(np.float32))
+                # imset_['hr_map'] = torch.from_numpy(imset_['hr_map'].astype(np.float32))
             imset_list[i] = imset_
 
         if len(imset_list) == 1:

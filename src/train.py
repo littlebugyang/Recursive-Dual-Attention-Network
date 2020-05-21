@@ -184,7 +184,6 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
             srs = fusion_model(lrs)
 
             # Register batch wrt HR
-            # todo:????
             shifts = register_batch(regis_model,
                                     srs[:, :, offset_x:(offset_x + low_res_width), offset_y:(offset_y + low_res_height)],
                                     reference=hrs[:, offset_x:(offset_x + low_res_width), offset_y:(offset_y + low_res_height)].view(-1, 1, low_res_width, low_res_height))
