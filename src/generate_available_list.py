@@ -9,7 +9,7 @@ def output_available_list(n_frame, root):
     # n_frame 为符合数据入口处要求输入的 nFrames，默认为 7
     seq_num = len(os.listdir(root))
     # 以上78为原有数据集的78个文件夹
-    output_file = open(os.path.join(seq_root, 'available_list.txt'), mode='w')
+    output_file = open('/home/aistudio/data/data35820/available_list.txt', mode='w')
     
     for i in range(seq_num):
         seq_dir = os.path.join(root, 'seq_' + str(i+1).zfill(7))
