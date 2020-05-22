@@ -43,7 +43,7 @@
 
      "min_L": 8,
      "n_views": 8,
-     "n_workers": 4,
+     "n_workers": 1,
      "crop": 3,
 
 
@@ -54,8 +54,8 @@
      "load_lr_maps": false,
      "beta": 50.0,
 
-    "create_patches": true,
-    "patch_size": 64,
+    "create_patches": false,
+    "patch_size": 32,
     "val_proportion": 0.10,
     "lambda": 0.000001
   }

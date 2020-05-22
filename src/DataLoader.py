@@ -26,8 +26,7 @@ def get_patch(img, x, y, size=32):
     Returns:
         patch: numpy.ndarray (size, size)
     """
-    
-    patch = img[..., x:(x + size), y:(y + size)]   # using ellipsis to slice arbitrary ndarrays
+    patch = img[..., x:(x + size), y:(y + size), :]   # using ellipsis to slice arbitrary ndarrays
     return patch
 
 
@@ -123,16 +122,14 @@ def read_imageset(imset_dir, create_patches=False, patch_size=64, seed=None, top
     hr = np.array(io.imread(join(imset_dir, 'im00001.png')), dtype=np.uint16)
 
     lr_images = []
-    for i in idx_names:
+    for i in idx_names[:top_k]:
         original_image = io.imread(join(imset_dir, f'im{i}.png'))
-        original_width = original_image.shape[0] # should be 448
-        original_height = original_image.shape[1] # should be 256
-        lr_image = transform.resize(original_image, (original_width, original_height))
+        original_height = original_image.shape[0] # should be 256
+        original_width = original_image.shape[1] # should be 448
+        lr_image = transform.resize(original_image, (original_height / scale_factor, original_width / scale_factor))
         lr_images.append(lr_image)
     
     lr_images = np.array(lr_images, dtype=np.uint16)
-
-    # lr_images = np.array([transform.resize(io.imread(join(imset_dir, f'LR{i}.png')), ) for i in idx_names], dtype=np.uint16)
 
     # hr_map = np.array(io.imread(join(imset_dir, 'SM.png')), dtype=np.bool) # 实际上 SM.png 大多是 1
     hr_map = np.array(np.ones(hr.shape), dtype=np.bool)
@@ -150,8 +147,8 @@ def read_imageset(imset_dir, create_patches=False, patch_size=64, seed=None, top
             np.random.seed(seed)
         '''
 
-        max_x = lr_images[0].shape[0] - patch_size
-        max_y = lr_images[0].shape[1] - patch_size
+        max_x = lr_images[0].shape[1] - patch_size
+        max_y = lr_images[0].shape[0] - patch_size
         x = np.random.randint(low=0, high=max_x)
         y = np.random.randint(low=0, high=max_y)
         lr_images = get_patch(lr_images, x, y, patch_size)  # broadcasting slicing coordinates across all images
@@ -196,7 +193,6 @@ class ImagesetDataset(Dataset):
 
     def __getitem__(self, index):
         """ Returns an ImageSet dict of all assets in the directory of the given index."""    
-
         if isinstance(index, int):
             imset_dir = [self.imset_dir[index]]
         elif isinstance(index, str):
@@ -226,7 +222,7 @@ class ImagesetDataset(Dataset):
             imset_['lr'] = torch.from_numpy(skimage.img_as_float(imset_['lr']).astype(np.float32))
             if imset_['hr'] is not None:
                 imset_['hr'] = torch.from_numpy(skimage.img_as_float(imset_['hr']).astype(np.float32))
-                # imset_['hr_map'] = torch.from_numpy(imset_['hr_map'].astype(np.float32))
+                imset_['hr_map'] = torch.from_numpy(imset_['hr_map'].astype(np.float32))
             imset_list[i] = imset_
 
         if len(imset_list) == 1:

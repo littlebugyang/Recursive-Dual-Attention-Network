@@ -173,7 +173,6 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
             # hrs: 输入的 high-res 图像
             # hr_maps: todo:????
             # names: imageset 的名字
-
             optimizer.zero_grad()  # zero the parameter gradients
             lrs = lrs.float().to(device)
             # alphas = alphas.float().to(device)
@@ -191,7 +190,8 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
             srs_shifted = apply_shifts(regis_model, srs, shifts, device)[:, 0]
 
             # Training loss
-            cropped_mask = torch_mask[0] * hr_maps  # Compute current mask (Batch size, W, H)
+            cropped_mask = torch_mask[0]
+            # cropped_mask = torch_mask[0] * hr_maps  # Compute current mask (Batch size, W, H)
             # srs_shifted = torch.clamp(srs_shifted, min=0.0, max=1.0)  # correct over/under-shoots
             loss = -get_loss(srs_shifted, hrs, cropped_mask, metric='cPSNR')
             loss = torch.mean(loss)

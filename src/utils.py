@@ -80,11 +80,9 @@ class collateFunction():
         isn_batch = []  # batch of site names
 
         train_batch = True
-
         for imageset in batch:
-
             lrs = imageset['lr']
-            L, H, W = lrs.shape
+            L, H, W, C= lrs.shape
 
             if L >= self.min_L:  # pad input to top_k
                 lr_batch.append(lrs[:self.min_L])
@@ -110,7 +108,8 @@ class collateFunction():
             hr_batch = torch.stack(hr_batch, dim=0)
             hm_batch = torch.stack(hm_batch, dim=0)
 
-        return padded_lr_batch, alpha_batch, hr_batch, hm_batch, isn_batch
+        return padded_lr_batch, hr_batch, hm_batch, isn_batch
+        # return padded_lr_batch, alpha_batch, hr_batch, hm_batch, isn_batch
 
 
 def imsetshow(imageset, k=None, show_map=True, show_histogram=True, figsize=None, **kwargs):

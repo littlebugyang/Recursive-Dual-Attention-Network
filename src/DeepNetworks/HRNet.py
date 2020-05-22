@@ -245,23 +245,23 @@ class HRNet(nn.Module):
         '''
         Super resolves a batch of low-resolution images.
         Args:
-            lrs : tensor (B, L, W, H), low-resolution images
+            lrs : tensor (B, L, W, H), low-resolution images 这里真的坑死人，谁知道你们读的居然是灰度图？
             alphas : tensor (B, L), boolean indicator (0 if padded low-res view, 1 otherwise)
         Returns:
             srs: tensor (B, C_out, W, H), super-resolved images
         '''
 
-        batch_size, seq_len, height, width = lrs.shape
-        lrs = lrs.view(-1, seq_len, 1, height, width)
+        batch_size, seq_len, height, width, channels = lrs.shape
+        lrs = lrs.view(-1, seq_len, 1, height, width, channels)
         # alphas = alphas.view(-1, seq_len, 1, 1, 1)
 
-        refs, _ = torch.median(lrs[:, :9], 1, keepdim=True)  # reference image aka anchor, shared across multiple views
-        refs = refs.repeat(1, seq_len, 1, 1, 1)
+        refs, _ = torch.median(lrs[:, :seq_len], 1, keepdim=True)  # reference image aka anchor, shared across multiple views
+        refs = refs.repeat(1, seq_len, 1, 1, 1, 1)
         stacked_input = torch.cat([lrs, refs], 2) # tensor (B, L, 2*C_in, W, H)
         
-        stacked_input = stacked_input.view(batch_size * seq_len, 2, width, height)
+        stacked_input = stacked_input.view(batch_size * seq_len, 2, width, height, 3) # 我就是3通道的RGB，怎么了？
         layer1 = self.encode(stacked_input) # encode input tensor
-        layer1 = layer1.view(batch_size, seq_len, -1, width, height) # tensor (B, L, C, W, H)
+        layer1 = layer1.view(batch_size, seq_len, -1, width, height, 3) # tensor (B, L, C, W, H)
 
         # fuse, upsample
         # recursive_layer = self.fuse(layer1, alphas)  # fuse hidden states (B, C, W, H)
